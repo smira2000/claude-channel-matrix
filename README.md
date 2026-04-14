@@ -113,4 +113,4 @@ Set in `~/.claude/channels/matrix/.env` or as shell environment variables (shell
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE). Inspired by [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official) (Apache-2.0).
