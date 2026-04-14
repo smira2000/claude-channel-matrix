@@ -23,7 +23,7 @@ All runtime state lives in `~/.claude/channels/matrix/`:
 
 **Why access.json is read on every message:** Allows the `/matrix:access` skill to edit the file and have changes take effect immediately without restarting the server.
 
-**Working indicator pattern:** On inbound message, the server sends "⏳ Working on it..." and stores the event ID. The `reply` tool edits that message with the first chunk of the response (via `m.replace`). This gives visual feedback without extra messages. Stale entries expire after 5 minutes or are cleared on the next inbound message.
+**Working indicator pattern:** On inbound message, the server sends "⏳ Working on it..." and stores the event ID. When `reply` is called, the working indicator is edited to "✓" (via `m.replace`) and the actual response is always sent as a new message. This is required because Matrix edits do not trigger push notifications — if the reply were an edit, users would never be pinged. Stale entries expire after 5 minutes or are cleared on the next inbound message.
 
 ## Testing
 

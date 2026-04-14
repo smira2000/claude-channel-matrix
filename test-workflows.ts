@@ -114,26 +114,31 @@ const tests: Test[] = [
 
   {
     name: 'working-indicator',
-    description: 'Verify the "Working on it..." message appears then gets edited',
+    description: 'Verify working indicator is edited to ✓ and reply arrives as a new message (enabling push notifications)',
     async run() {
       const tag = Math.random().toString(36).slice(2, 6)
+      const startIdx = botMessages.length
       await sendAsUser(`[test-${tag}] What is 2+2? Answer with just the number.`)
-      // The working message appears then gets edited to the real reply.
-      // Due to race conditions, we might miss the "Working on it..." state
-      // and only see the edited version. So we check for either:
-      // 1. A message that was originally "Working on it..." and got edited
-      // 2. Any message containing "4" (the reply replaced the working indicator)
+
+      // Wait for the actual reply
       const [reply] = await waitForBotMessage({
         filter: b => b.includes('4'),
         skipWorking: true,
         timeout: TIMEOUT,
       })
       if (!reply) throw new Error('bot did not reply with answer')
-      // If the message was edited, the working indicator worked correctly
-      if (reply.edited) {
-        // Perfect — working message appeared and was edited
-      }
-      // Even if we didn't catch the edit (race), the reply came through
+
+      // The fix: reply must be a NEW message (not an edit) so push notifications fire.
+      // Matrix edits do not trigger push notifications — if the reply were an edit of
+      // the working indicator, users would never get pinged.
+      if (reply.edited) throw new Error(
+        'reply was sent as an edit of the working indicator — push notifications will not fire'
+      )
+
+      // Verify the working indicator was cleaned up (edited to ✓)
+      const newMessages = botMessages.slice(startIdx)
+      const checkmark = newMessages.find(m => m.body === '✓' && m.edited)
+      if (!checkmark) throw new Error('working indicator was not edited to ✓')
     },
   },
 
