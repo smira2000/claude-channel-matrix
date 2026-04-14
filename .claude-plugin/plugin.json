@@ -1,0 +1,6 @@
+{
+  "name": "matrix",
+  "description": "Matrix channel for Claude Code — messaging bridge with built-in access control. Chat with Claude via any Matrix client (Element, FluffyChat, etc). Manage pairing, allowlists, and policy via /matrix:access.",
+  "version": "0.1.0",
+  "keywords": ["matrix", "element", "messaging", "channel", "mcp", "chat"]
+}

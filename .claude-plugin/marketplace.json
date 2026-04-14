@@ -1,0 +1,16 @@
+{
+  "name": "claude-channel-matrix",
+  "description": "Matrix channel plugin for Claude Code",
+  "owner": {
+    "name": "smira2000",
+    "github": "smira2000"
+  },
+  "plugins": [
+    {
+      "name": "matrix",
+      "source": "./",
+      "description": "Bridge Matrix messages into Claude Code sessions",
+      "version": "0.1.0"
+    }
+  ]
+}
