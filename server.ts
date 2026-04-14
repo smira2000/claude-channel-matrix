@@ -309,26 +309,21 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const sentIds: string[] = []
       const workingId = getWorkingId(roomId)
 
-      for (let i = 0; i < chunks.length; i++) {
-        // Edit the "working..." message with the first chunk
-        if (i === 0 && workingId) {
+      // Edit the working indicator away — Matrix edits don't push-notify,
+      // so the actual reply must always be a new message.
+      if (workingId) {
+        try {
           await client.sendEvent(roomId, 'm.room.message', {
             msgtype: 'm.text',
-            body: `* ${chunks[i]}`,
-            'm.new_content': {
-              msgtype: 'm.text',
-              body: chunks[i],
-            },
-            'm.relates_to': {
-              rel_type: 'm.replace',
-              event_id: workingId,
-            },
+            body: '* ✓',
+            'm.new_content': { msgtype: 'm.text', body: '✓' },
+            'm.relates_to': { rel_type: 'm.replace', event_id: workingId },
           })
-          sentIds.push(workingId)
-          pendingWorkingMessages.delete(roomId)
-          continue
-        }
+        } catch {}
+        pendingWorkingMessages.delete(roomId)
+      }
 
+      for (let i = 0; i < chunks.length; i++) {
         const content: Record<string, unknown> = {
           msgtype: 'm.text',
           body: chunks[i],
