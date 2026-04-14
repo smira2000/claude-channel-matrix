@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+export {} // mark as ES module so top-level await is valid
 // Wrapper that silences matrix-js-sdk stdout pollution before loading server.ts.
 // matrix-js-sdk uses loglevel which writes debug logs via console.log to stdout,
 // corrupting the MCP JSON-RPC stdio transport. Override BEFORE any import.

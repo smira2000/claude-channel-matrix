@@ -13,7 +13,7 @@
  * Set MATRIX_TEST_USER and MATRIX_TEST_PASSWORD in ~/.claude/channels/matrix/.env.
  */
 import * as sdk from 'matrix-js-sdk'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 
@@ -44,6 +44,7 @@ const results: TestResult[] = []
 
 let testClient: sdk.MatrixClient
 let dmRoom: string
+let testAccessToken = '' // for raw Matrix API calls (file upload etc.)
 
 // Collect all bot messages in the DM
 const botMessages: { eventId: string; body: string; ts: number; edited?: boolean }[] = []
@@ -253,6 +254,93 @@ const tests: Test[] = [
       if (!reply) throw new Error('bot could not run git status and report results')
     },
   },
+
+  {
+    name: 'attachment-download',
+    description: 'Upload a test file, ask bot to download it, verify inbox path returned',
+    async run() {
+      // Upload a small text file as the test user
+      const tag = Math.random().toString(36).slice(2, 8)
+      const fileContent = Buffer.from(`mate-test attachment ${tag}`)
+      const uploadResp = await fetch(
+        `${HOMESERVER}/_matrix/media/v3/upload?filename=mate-test-${tag}.txt`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${testAccessToken}`,
+            'Content-Type': 'text/plain',
+          },
+          body: fileContent,
+        }
+      )
+      if (!uploadResp.ok) throw new Error(`upload failed: ${uploadResp.status} ${await uploadResp.text()}`)
+      const { content_uri: mxcUrl } = await uploadResp.json() as any
+      if (!mxcUrl) throw new Error('no content_uri in upload response')
+
+      // Send as m.file event — bot will receive and process this
+      const msgRes = await testClient.sendEvent(dmRoom, 'm.room.message' as any, {
+        msgtype: 'm.file',
+        body: `mate-test-${tag}.txt`,
+        url: mxcUrl,
+        info: { mimetype: 'text/plain', size: fileContent.length },
+      })
+      const attachEventId = msgRes.event_id
+
+      // Wait for bot to acknowledge the file message before following up
+      await waitForBotMessage({ skipWorking: true, timeout: TIMEOUT })
+
+      // Ask the bot to download the specific attachment by event ID
+      await sendAsUser(
+        `Use the download_attachment tool to download the file with event ID ${attachEventId} from this room. Reply with the local file path only.`
+      )
+      const [reply] = await waitForBotMessage({
+        filter: b => b.includes('inbox') || b.includes(`mate-test-${tag}`) || b.includes('downloaded'),
+        timeout: TIMEOUT,
+      })
+      if (!reply) throw new Error('bot did not confirm attachment download with a file path')
+    },
+  },
+
+  {
+    name: 'chunking',
+    description: 'Verify long replies are split across multiple messages',
+    async run() {
+      const accessPath = join(STATE_DIR, 'access.json')
+      let origContent: string | null = null
+      try {
+        origContent = existsSync(accessPath) ? readFileSync(accessPath, 'utf8') : null
+      } catch {}
+
+      // Lower the chunk limit so a medium-length reply spans multiple messages
+      const current = origContent ? JSON.parse(origContent) : {}
+      writeFileSync(accessPath, JSON.stringify({ ...current, textChunkLimit: 100 }, null, 2))
+
+      try {
+        // Prompt that reliably produces >200 chars (multiple chunks at 100-char limit)
+        await sendAsUser(
+          'List 6 programming languages. For each write: the name, a colon, one sentence on what it\'s used for. Numbered list, no extra commentary.'
+        )
+        const messages = await waitForBotMessage({
+          filter: () => true,
+          skipWorking: true,
+          count: 2,
+          timeout: TIMEOUT * 2,
+        })
+        if (messages.length < 2) throw new Error(`expected at least 2 chunks, got ${messages.length}`)
+      } finally {
+        // Restore original access.json
+        if (origContent !== null) {
+          writeFileSync(accessPath, origContent)
+        } else {
+          try {
+            const restored = JSON.parse(readFileSync(accessPath, 'utf8'))
+            delete restored.textChunkLimit
+            writeFileSync(accessPath, JSON.stringify(restored, null, 2))
+          } catch {}
+        }
+      }
+    },
+  },
 ]
 
 // ── Runner ───────────────────────────────────────────────────────────────────
@@ -269,6 +357,7 @@ async function setup() {
   const loginJson = await loginResp.json() as any
   if (!loginJson.access_token) throw new Error(`Login failed: ${JSON.stringify(loginJson)}`)
   console.log(`  ✅ Logged in as ${loginJson.user_id}`)
+  testAccessToken = loginJson.access_token
 
   testClient = sdk.createClient({
     baseUrl: HOMESERVER,

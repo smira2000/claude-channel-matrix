@@ -313,7 +313,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       // so the actual reply must always be a new message.
       if (workingId) {
         try {
-          await client.sendEvent(roomId, 'm.room.message', {
+          await client.sendEvent(roomId, 'm.room.message' as any, {
             msgtype: 'm.text',
             body: '* ✓',
             'm.new_content': { msgtype: 'm.text', body: '✓' },
@@ -338,7 +338,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
           }
         }
 
-        const res = await client.sendEvent(roomId, 'm.room.message', content)
+        const res = await client.sendEvent(roomId, 'm.room.message' as any, content) as { event_id: string }
         sentIds.push(res.event_id)
         trackSent(res.event_id)
       }
@@ -349,7 +349,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const roomId = args.room_id as string
       const eventId = args.event_id as string
       const emoji = args.emoji as string
-      await client.sendEvent(roomId, 'm.reaction', {
+      await client.sendEvent(roomId, 'm.reaction' as any, {
         'm.relates_to': {
           rel_type: 'm.annotation',
           event_id: eventId,
@@ -363,7 +363,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const roomId = args.room_id as string
       const eventId = args.event_id as string
       const text = args.text as string
-      await client.sendEvent(roomId, 'm.room.message', {
+      await client.sendEvent(roomId, 'm.room.message' as any, {
         msgtype: 'm.text',
         body: `* ${text}`,
         'm.new_content': {
@@ -381,7 +381,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     case 'fetch_messages': {
       const roomId = args.room_id as string
       const limit = Math.min((args.limit as number) || 20, 100)
-      const res = await client.createMessagesRequest(roomId, undefined, limit, 'b')
+      const res = await client.createMessagesRequest(roomId, undefined, limit, sdk.Direction.Backward)
       const messages = (res.chunk || []).reverse()
       const lines = messages
         .filter((e: any) => e.type === 'm.room.message')
@@ -514,7 +514,7 @@ async function handleInbound(event: any, room: sdk.Room) {
       })
       // Ack the permission response
       try {
-        await client.sendEvent(roomId, 'm.reaction', {
+        await client.sendEvent(roomId, 'm.reaction' as any, {
           'm.relates_to': {
             rel_type: 'm.annotation',
             event_id: eventId,
@@ -581,7 +581,7 @@ async function handleInbound(event: any, room: sdk.Room) {
   // ── Ack reaction ──
   if (access.ackReaction) {
     try {
-      await client.sendEvent(roomId, 'm.reaction', {
+      await client.sendEvent(roomId, 'm.reaction' as any, {
         'm.relates_to': {
           rel_type: 'm.annotation',
           event_id: eventId,
@@ -594,10 +594,10 @@ async function handleInbound(event: any, room: sdk.Room) {
   // ── "Working..." indicator ──
   let workingEventId: string | undefined
   try {
-    const res = await client.sendEvent(roomId, 'm.room.message', {
+    const res = await client.sendEvent(roomId, 'm.room.message' as any, {
       msgtype: 'm.text',
       body: '⏳ Working on it...',
-    })
+    }) as { event_id: string }
     workingEventId = res.event_id
     trackSent(res.event_id)
   } catch {}
@@ -654,6 +654,15 @@ async function main() {
   })
   const rooms = client.getRooms()
   log('INFO', `synced: ${rooms.length} rooms joined`)
+
+  // Log sync state transitions — SDK handles reconnection automatically
+  client.on(sdk.ClientEvent.Sync as any, (state: string, prevState: string | null) => {
+    if (state === 'ERROR' || state === 'RECONNECTING') {
+      log('WARN', `sync: ${prevState ?? 'none'} → ${state}`)
+    } else if (state === 'SYNCING' && prevState !== 'SYNCING') {
+      log('INFO', `sync: reconnected (${prevState ?? 'none'} → SYNCING)`)
+    }
+  })
 
   // Auto-join invited rooms
   client.on(sdk.RoomMemberEvent.Membership as any, (event: any, member: any) => {

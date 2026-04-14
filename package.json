@@ -6,10 +6,16 @@
   "type": "module",
   "bin": "./server.ts",
   "scripts": {
-    "start": "bun install --no-summary && bun start.ts"
+    "start": "bun install --no-summary && bun start.ts",
+    "test": "bun test-workflows.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "matrix-js-sdk": "^36.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.2"
   }
 }
